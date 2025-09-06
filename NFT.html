@@ -1,0 +1,2373 @@
+hello world
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #00ff00;
+      --primary-dark: #004d00;
+      --primary-light: #00ff88;
+      --secondary-color: #ff00ff;
+      --secondary-dark: #4d004d;
+      --secondary-light: #ff88ff;
+      --error-color: #ff4444;
+      --bg-dark: #1a1a1a;
+      --bg-darker: #0d0d0d;
+      --bg-medium: #2a2a2a;
+      --bg-light: #3a3a3a;
+      --text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+      --box-shadow: 0 0 12px rgba(0, 255, 0, 0.4);
+      --glow-color: rgba(0, 255, 0, 0.6);
+    }
+    .purple-theme {
+      --primary-color: #ff00ff;
+      --primary-dark: #4d004d;
+      --primary-light: #ff88ff;
+      --text-shadow: 0 0 8px rgba(255, 0, 255, 0.5);
+      --box-shadow: 0 0 12px rgba(255, 0, 255, 0.4);
+      --glow-color: rgba(255, 0, 255, 0.6);
+    }
+    * {
+      box-sizing: border-box;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    body {
+      margin: 0;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--bg-darker), var(--bg-dark));
+      color: var(--primary-color);
+      position: relative;
+      overflow-x: hidden;
+      transition: background 0.5s, color 0.5s;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    #backgroundCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -2;
+      pointer-events: none;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+      opacity: 0.2;
+      z-index: -1;
+      animation: glitch 4s infinite;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.1) 2px, rgba(0, 0, 0, 0.1) 3px);
+      opacity: 0.3;
+      z-index: -1;
+      animation: scanline 6s linear infinite;
+    }
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+    @keyframes glitch {
+      0%, 100% { transform: translate(0, 0); opacity: 0.2; }
+      2% { transform: translate(3px, -3px); opacity: 0.15; }
+      4% { transform: translate(-3px, 2px); opacity: 0.2; }
+    }
+    .window {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: linear-gradient(to bottom, #1a1a1a, #2a2a2a, #1a1a1a);
+      border: 2px solid;
+      border-image: linear-gradient(to bottom right, var(--primary-color), var(--primary-dark)) 1;
+      box-shadow: var(--box-shadow);
+      padding: 15px;
+      border-radius: 10px;
+      animation: fadeIn 0.5s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .title-bar {
+      background: linear-gradient(to right, var(--primary-dark), var(--primary-color));
+      color: #000;
+      padding: 8px 10px;
+      margin: -15px -15px 12px;
+      border-radius: 8px 8px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      text-shadow: var(--text-shadow);
+      animation: typing 2s steps(20) 1;
+      font-size: 15px;
+    }
+    @keyframes typing {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+    .theme-toggle, button {
+      background: linear-gradient(45deg, var(--bg-medium), var(--bg-light));
+      border: 1px solid var(--primary-color);
+      color: var(--primary-color);
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+      font-size: 10px;
+    }
+    .theme-toggle::after, button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, var(--glow-color), transparent);
+      transition: left 0.5s;
+    }
+    .theme-toggle:hover::after, button:hover::after {
+      left: 100%;
+    }
+    .theme-toggle:hover, button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 15px var(--glow-color);
+      background: var(--bg-light);
+    }
+    button:disabled {
+      border-color: var(--primary-dark);
+      color: var(--primary-dark);
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+    }
+    .sidebar, .main, .metadata-section {
+      background: linear-gradient(to bottom, #1a1a1a, #222222, #2a2a2a);
+      padding: 15px;
+      border: 1px solid var(--primary-color);
+      border-radius: 10px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: slideIn 0.5s ease-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .sidebar:hover, .main:hover, .metadata-section:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px var(--box-shadow);
+    }
+    .sidebar { flex: 1; max-width: 300px; }
+    .main { flex: 3; display: flex; flex-direction: column; gap: 20px; }
+    .preview-section { display: flex; gap: 20px; }
+    .preview-canvas { flex: 1; }
+    .metadata-section { flex: 1; max-width: 300px; }
+    .preview-buttons { display: flex; gap: 12px; }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 12px;
+    }
+    .gallery-item {
+      border: 1px solid var(--primary-color);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-dark);
+      cursor: pointer;
+      transition: transform 0.3s, box-shadow 0.3s;
+      animation: popIn 0.3s ease-out;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.8); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .gallery-item:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 20px var(--glow-color);
+    }
+    .gallery-item img { width: 100%; height: 100px; object-fit: contain; }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: linear-gradient(to bottom, #1a1a1a, #2a2a2a);
+      border: 2px solid var(--primary-color);
+      border-radius: 12px;
+      padding: 25px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      animation: modalFadeIn 0.4s ease-in;
+      box-shadow: var(--box-shadow);
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-header { display: flex; justify-content: flex-end; margin-bottom: 15px; }
+    .modal-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .modal-counter { font-size: 11px; text-shadow: var(--text-shadow); }
+    .modal-content img {
+      width: 100%;
+      max-height: 400px;
+      object-fit: contain;
+      border: 1px solid var(--primary-color);
+      border-radius: 8px;
+      margin-bottom: 15px;
+      transition: opacity 0.3s;
+    }
+    .modal-content img.fade { opacity: 0; }
+    .trait-list, .trait-editor {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .trait-list div {
+      background: var(--bg-medium);
+      padding: 5px 10px;
+      border: 1px solid var(--primary-color);
+      border-radius: 6px;
+      font-size: 10px;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .trait-list div:hover {
+      background: var(--bg-light);
+    }
+    .trait-editor div { display: flex; flex-direction: column; }
+    .trait-editor label { font-size: 10px; margin-bottom: 3px; }
+    .trait-editor select { padding: 3px; font-size: 10px; }
+    .duplicate-warning {
+      color: var(--error-color);
+      font-size: 10px;
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+      text-shadow: 0 0 5px var(--error-color);
+    }
+    .duplicate-warning.show { display: block; }
+    .nft-name {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-shadow: var(--text-shadow);
+    }
+    .close-modal, .download-nft, .delete-button {
+      border: 1px solid var(--error-color);
+      color: var(--error-color);
+      padding: 5px 10px;
+      font-size: 10px;
+    }
+    .close-modal:hover, .download-nft:hover, .delete-button:hover {
+      background: var(--error-color);
+      color: #fff;
+      box-shadow: 0 0 10px var(--error-color);
+    }
+    .download-nft { border-color: var(--primary-color); color: var(--primary-color); }
+    .download-nft:hover { background: var(--bg-light); border-color: var(--primary-light); }
+    .replace-one {
+      border: 1px solid var(--secondary-color);
+      color: var(--secondary-color);
+      padding: 5px 10px;
+      font-size: 10px;
+    }
+    .replace-one:hover {
+      background: var(--secondary-color);
+      color: #fff;
+      box-shadow: 0 0 10px var(--secondary-light);
+    }
+    .custom-traits-section {
+      margin-top: 15px;
+      padding: 10px;
+      background: linear-gradient(to bottom, #1a1a1a, #222222);
+      border: 1px solid var(--primary-color);
+      border-radius: 8px;
+    }
+    .custom-trait-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .custom-trait-item {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .custom-trait-item input {
+      font-size: 10px;
+      padding: 4px;
+    }
+    .custom-trait-item button {
+      border-color: var(--error-color);
+      color: var(--error-color);
+      font-size: 10px;
+    }
+    .custom-trait-item button:hover {
+      background: var(--error-color);
+      color: #fff;
+    }
+    h2 {
+      font-size: 16px;
+      margin: 0 0 12px;
+      text-shadow: var(--text-shadow);
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+      animation: typing 1.5s steps(20) 1;
+    }
+    .layer-item, .trait-item, .rarity-item, .exclusion-item, .layer-exclusion-item {
+      background: linear-gradient(to right, var(--bg-medium), var(--bg-dark));
+      border: 1px solid var(--primary-color);
+      padding: 8px;
+      margin: 5px 0;
+      border-radius: 8px;
+      transition: background 0.2s, transform 0.2s;
+      font-size: 10px;
+    }
+    .layer-item { cursor: move; }
+    .layer-item:hover, .trait-item:hover { background: var(--bg-light); transform: translateY(-2px); }
+    .layer-item.dragging { opacity: 0.6; transform: scale(0.97); }
+    .layer-header, .trait-rarity-header, .trait-exclusion-header, .layer-exclusion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .layer-header:hover, .trait-rarity-header:hover, .trait-exclusion-header:hover, .layer-exclusion-header:hover {
+      color: var(--primary-light);
+    }
+    .layer-traits, .trait-rarity-content, .trait-exclusion-content, .layer-exclusion-content {
+      display: none;
+      margin-top: 10px;
+    }
+    .layer-traits.show, .trait-rarity-content.show, .trait-exclusion-content.show, .layer-exclusion-content.show {
+      display: block;
+      animation: slideDown 0.3s ease-out;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; max-height: 0; }
+      to { opacity: 1; max-height: 500px; }
+    }
+    .trait-weight { width: 50px; padding: 3px; font-size: 10px; }
+    input, select, textarea {
+      background: var(--bg-dark);
+      border: 2px solid var(--primary-color);
+      color: var(--primary-color);
+      padding: 5px;
+      border-radius: 6px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-size: 10px;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary-light);
+      background: var(--bg-medium);
+      box-shadow: 0 0 10px var(--glow-color);
+      outline: none;
+    }
+    textarea { width: 100%; resize: vertical; min-height: 60px; max-height: 180px; }
+    canvas {
+      border: 2px solid var(--primary-color);
+      background: #000;
+      border-radius: 8px;
+      box-shadow: var(--box-shadow);
+      max-width: 500px;
+      width: 100%;
+      height: auto;
+      cursor: grab;
+    }
+    canvas:active {
+      cursor: grabbing;
+    }
+    label { font-size: 10px; margin-bottom: 4px; display: block; }
+    .tooltip { position: relative; display: inline-block; }
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: 140px;
+      background: var(--bg-dark);
+      color: var(--primary-color);
+      text-align: center;
+      border-radius: 6px;
+      padding: 8px;
+      position: absolute;
+      z-index: 1;
+      bottom: 130%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      border: 1px solid var(--primary-color);
+      box-shadow: var(--box-shadow);
+      animation: flicker 0.5s infinite alternate;
+      font-size: 10px;
+    }
+    @keyframes flicker {
+      0% { opacity: 0.9; }
+      100% { opacity: 1; }
+    }
+    .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+    .progress-container { display: none; margin: 10px 0; text-align: center; }
+    .progress-container.show { display: block; }
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      background: var(--bg-medium);
+      border: 1px solid var(--primary-color);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+      width: 0;
+      transition: width 0.3s ease;
+    }
+    .progress-text { margin-top: 5px; font-size: 10px; }
+    .spinner {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 3px solid var(--primary-color);
+      border-top: 3px solid transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 10px auto;
+    }
+    .spinner.show { display: block; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    #previewControls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .trait-exclusion-section {
+      background: linear-gradient(to bottom, #1a1a1a, #222222, #2a2a2a);
+      border: 1px solid #ff4500;
+      padding: 15px;
+      margin: 12px 0;
+      border-radius: 10px;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .trait-exclusion-section button {
+      border-color: #ff4500;
+      color: #ff4500;
+      font-size: 10px;
+    }
+    .trait-exclusion-section button:hover {
+      border-color: #ff6347;
+      color: #ff6347;
+      background: var(--bg-light);
+      box-shadow: 0 0 10px rgba(255, 69, 0, 0.6);
+    }
+    .trait-exclusion-content {
+      max-width: 100%;
+      overflow-x: hidden;
+      margin-top: 12px;
+      padding: 8px;
+    }
+    .trait-exclusion-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 12px;
+      padding: 8px;
+    }
+    .trait-exclusion-form select,
+    .trait-exclusion-form button {
+      width: 100%;
+      padding: 6px;
+      font-size: 10px;
+    }
+    .exclusion-item {
+      background: linear-gradient(to right, var(--bg-medium), var(--bg-dark));
+      padding: 8px;
+      margin: 8px 0;
+      border: 1px solid #ff4500;
+      border-radius: 8px;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .layer-exclusion-section {
+      background: linear-gradient(to bottom, #1a1a1a, #222222, #2a2a2a);
+      border: 1px solid #ff8c00;
+      padding: 15px;
+      margin: 12px 0;
+      border-radius: 10px;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .layer-exclusion-section button {
+      border-color: #ff8c00;
+      color: #ff8c00;
+      font-size: 10px;
+    }
+    .layer-exclusion-section button:hover {
+      border-color: #ffa500;
+      color: #ffa500;
+      background: var(--bg-light);
+      box-shadow: 0 0 10px rgba(255, 140, 0, 0.6);
+    }
+    .layer-exclusion-content {
+      max-width: 100%;
+      overflow-x: hidden;
+      margin-top: 12px;
+      padding: 8px;
+    }
+    .layer-exclusion-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 12px;
+      padding: 8px;
+    }
+    .layer-exclusion-form select,
+    .layer-exclusion-form button {
+      width: 100%;
+      padding: 6px;
+      font-size: 10px;
+    }
+    .layer-exclusion-item {
+      background: linear-gradient(to right, var(--bg-medium), var(--bg-dark));
+      padding: 8px;
+      margin: 8px 0;
+      border: 1px solid #ff8c00;
+      border-radius: 8px;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .metadata-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 10px 0;
+    }
+    .metadata-checkbox input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--primary-color);
+    }
+    .layer-name-input, .trait-name-input {
+      background: var(--bg-dark);
+      border: 1px solid var(--primary-color);
+      color: var(--primary-color);
+      padding: 3px;
+      border-radius: 4px;
+      font-size: 10px;
+      width: 120px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .layer-name-input:focus, .trait-name-input:focus {
+      border-color: var(--primary-light);
+      background: var(--bg-medium);
+      box-shadow: 0 0 8px var(--glow-color);
+      outline: none;
+    }
+    .trait-blend-mode {
+      padding: 3px;
+      font-size: 10px;
+      margin-top: 3px;
+    }
+    .trait-position {
+      display: flex;
+      gap: 5px;
+    }
+    .trait-position input {
+      width: 60px;
+    }
+    .trait-scale input {
+      width: 60px;
+    }
+    .canvas-dimensions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .canvas-dimensions label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .canvas-dimensions input {
+      width: 80px;
+    }
+    .trait-item.selected {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 10px var(--glow-color);
+    }
+    .delete-layer-button, .delete-trait-button {
+      border: 1px solid var(--error-color);
+      color: var(--error-color);
+      padding: 3px 6px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .delete-layer-button:hover, .delete-trait-button:hover {
+      background: var(--error-color);
+      color: #fff;
+      box-shadow: 0 0 10px var(--error-color);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="backgroundCanvas"></canvas>
+  <div class="window">
+    <div class="title-bar">
+      <span>The Generator</span>
+      <button class="theme-toggle">Toggle Theme</button>
+    </div>
+    <div class="container">
+      <div class="sidebar">
+        <h2>Layers</h2>
+        <div class="tooltip">
+          <button>Add Layer</button>
+          <span class="tooltiptext">Add a new layer for traits</span>
+        </div>
+        <div class="tooltip">
+          <button>Import Project</button>
+          <span class="tooltiptext">Import a project folder with layers and traits</span>
+        </div>
+        <div id="layers"></div>
+        <div class="trait-exclusion-section">
+          <div class="trait-exclusion-header">
+            Trait Exclusion
+            <span id="traitExclusionToggle">▼</span>
+          </div>
+          <div class="trait-exclusion-content show" id="traitExclusion">
+            <div class="tooltip">
+              <button>Add Trait Exclusion</button>
+              <span class="tooltiptext">Prevent two traits from appearing together</span>
+            </div>
+            <div id="exclusionForm"></div>
+            <div id="exclusionList"></div>
+          </div>
+        </div>
+        <div class="layer-exclusion-section">
+          <div class="layer-exclusion-header">
+            Layer Exclusion
+            <span id="layerExclusionToggle">▼</span>
+          </div>
+          <div class="layer-exclusion-content show" id="layerExclusion">
+            <div class="tooltip">
+              <button>Add Layer Exclusion</button>
+              <span class="tooltiptext">Prevent two layers from appearing together</span>
+            </div>
+            <div id="layerExclusionForm"></div>
+            <div id="layerExclusionList"></div>
+          </div>
+        </div>
+        <div class="trait-rarity-section">
+          <div class="trait-rarity-header">
+            Trait Rarity
+            <span id="traitRarityToggle">▼</span>
+          </div>
+          <div class="trait-rarity-content show" id="traitRarity"></div>
+        </div>
+      </div>
+      <div class="main">
+        <h2>Preview</h2>
+        <div class="preview-section">
+          <div class="preview-canvas">
+            <div class="canvas-dimensions">
+              <label>Width: <input type="number" id="canvasWidth" value="500" min="1"></label>
+              <label>Height: <input type="number" id="canvasHeight" value="500" min="1"></label>
+            </div>
+            <canvas id="previewCanvas" width="500" height="500"></canvas>
+            <div id="previewControls"></div>
+            <div class="preview-buttons">
+              <div class="tooltip">
+                <button id="previewRandomNFTButton">Preview Random NFT</button>
+                <span class="tooltiptext">Generate a random NFT preview</span>
+              </div>
+              <div class="tooltip">
+                <button id="generateGalleryButton">Generate Preview NFTs</button>
+                <span class="tooltiptext">Generate a gallery of NFT previews</span>
+              </div>
+            </div>
+            <label>
+              Number of NFTs (max 2222):
+              <input type="number" id="nftCount" value="100" min="1" max="2222">
+            </label>
+            <div class="progress-container" id="galleryProgress">
+              <div class="progress-bar">
+                <div class="progress-bar-fill" id="galleryProgressBar"></div>
+              </div>
+              <div class="progress-text" id="galleryProgressText">0%</div>
+              <button id="cancelGalleryButton" style="display: none;">Cancel</button>
+              <div class="spinner" id="gallerySpinner"></div>
+            </div>
+            <div class="gallery-section">
+              <h2>Preview Gallery</h2>
+              <div class="gallery-grid" id="galleryGrid"></div>
+            </div>
+          </div>
+          <div class="metadata-section">
+            <h2>Metadata Settings</h2>
+            <div class="tooltip">
+              <label for="metadataTitle">Collection Title:</label>
+              <input type="text" id="metadataTitle" value="Super NFT" placeholder="e.g., Super NFT Collection">
+              <span class="tooltiptext">Base title for all NFTs (ID appended)</span>
+            </div>
+            <div class="tooltip">
+              <label for="metadataDescription">Collection Description:</label>
+              <textarea id="metadataDescription" placeholder="A unique NFT collection">A unique NFT from the Super NFT Generator collection</textarea>
+              <span class="tooltiptext">Description for all NFTs</span>
+            </div>
+            <div class="tooltip metadata-checkbox">
+              <input type="checkbox" id="includeIPFS" checked>
+              <label for="includeIPFS">Include IPFS link in metadata</label>
+              <span class="tooltiptext">Some platforms require IPFS link, some don't</span>
+            </div>
+            <div class="tooltip">
+              <label for="ipfsCID">IPFS image CID:</label>
+              <input type="text" id="ipfsCID" placeholder="Enter IPFS CID">
+              <span class="tooltiptext">Enter the IPFS CID for your NFT images</span>
+            </div>
+            <div class="tooltip" id="exportMetadataContainer" style="display: none;">
+              <button id="exportMetadataButton">Export new Metadata</button>
+              <span class="tooltiptext">This will export new version of just the Jsons with newly updated IPFS information</span>
+            </div>
+          </div>
+        </div>
+        <div class="tooltip">
+          <button id="downloadNFTsButton">Download NFTs</button>
+          <span class="tooltiptext">Download NFTs from the preview gallery</span>
+        </div>
+        <div class="progress-container" id="nftProgress">
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="nftProgressBar"></div>
+          </div>
+          <div class="progress-text" id="nftProgressText">0%</div>
+          <button id="cancelNFTButton" style="display: none;">Cancel</button>
+          <div class="spinner" id="nftSpinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="nftModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="download-nft" id="downloadNFTModalButton">Download NFT</button>
+        <button class="replace-one" id="replaceOneButton">Replace with 1/1</button>
+        <button class="close-modal">Close</button>
+      </div>
+      <div class="modal-nav">
+        <button id="prevButton">Previous</button>
+        <span class="modal-counter" id="modalCounter">1/1</span>
+        <button id="nextButton">Next</button>
+      </div>
+      <div class="nft-name" id="nftName"></div>
+      <img id="modalImage" src="" alt="NFT Preview">
+      <div class="trait-list" id="modalTraitList"></div>
+      <div class="trait-editor" id="modalTraitEditor"></div>
+      <div class="custom-traits-section" id="customTraitsSection" style="display: none;">
+        <h2 style="font-size: 14px;">Custom Traits for 1/1</h2>
+        <div class="tooltip">
+          <button id="addCustomTraitButton">Add Custom Trait</button>
+          <span class="tooltiptext">Add a custom layer and trait for this 1/1 NFT</span>
+        </div>
+        <div class="custom-trait-list" id="customTraitList"></div>
+      </div>
+      <div class="duplicate-warning" id="duplicateWarning">This NFT already exists</div>
+    </div>
+  </div>
+  <div class="footer" style="text-align: center; margin-top: 20px; padding: 15px; background: linear-gradient(to bottom, var(--bg-darker), var(--bg-dark)); border-top: 1px solid var(--primary-color); border-radius: 8px; box-shadow: var(--box-shadow);">
+    <p style="font-size: 12px; margin: 0 0 10px; text-shadow: var(--text-shadow);">
+      Created by <a href="https://x.com/lookupcatnip" target="_blank" style="color: var(--primary-light); text-decoration: none; font-weight: 700; transition: color 0.2s;">Catnip</a>
+    </p>
+    <div style="font-size: 10px; line-height: 1.6; color: var(--primary-color); text-shadow: var(--text-shadow);">
+      <p style="margin: 5px 0;">Donate</p>
+      <p style="margin: 5px 0; word-break: break-all;">Sol: <span style="color: var(--primary-light); font-family: 'JetBrains Mono', monospace;">BDRK87AEXBh4yY9wwSHhu6GajGgip6Jfq9atNcrPN4Tq</span></p>
+      <p style="margin: 5px 0; word-break: break-all;">Eth: <span style="color: var(--primary-light); font-family: 'JetBrains Mono', monospace;">0xEbB0870725874F1c4779271e2EE5B919e928faf5</span></p>
+    </div>
+  </div>
+  <script src="https://unpkg.com/jszip@3.7.1/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <script>
+    const state = {
+      layers: [],
+      previewTraits: new Map(),
+      galleryItems: [],
+      traitExclusions: [],
+      layerExclusions: [],
+      currentModalIndex: 0,
+      isGeneratingGallery: false,
+      isDownloadingNFTs: false,
+      isTraitRarityVisible: true,
+      isTraitExclusionVisible: true,
+      isLayerExclusionVisible: true,
+      oneOfOneItems: new Map(),
+      canvasWidth: 500,
+      canvasHeight: 500,
+      dimensionsSet: false,
+      currentEditedTrait: null,
+      undoStack: []
+    };
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    const blendModeMap = {
+      'Normal': 'source-over',
+      'Multiply': 'multiply',
+      'Screen': 'screen',
+      'Overlay': 'overlay',
+      'Darken': 'darken',
+      'Lighten': 'lighten',
+      'Color Dodge': 'color-dodge',
+      'Color Burn': 'color-burn',
+      'Hard Light': 'hard-light',
+      'Soft Light': 'soft-light',
+      'Difference': 'difference',
+      'Exclusion': 'exclusion',
+      'Hue': 'hue',
+      'Saturation': 'saturation',
+      'Color': 'color',
+      'Luminosity': 'luminosity'
+    };
+
+    const blendFunctions = {
+      'linear-burn': (a, b) => clamp(a + b - 1, 0, 1),
+      'linear-dodge': (a, b) => clamp(a + b, 0, 1),
+      'vivid-light': (a, b) => b < 0.5 ? (b === 0 ? 0 : clamp(1 - (1 - a) / (2 * b), 0, 1)) : (b === 1 ? 1 : clamp(a / (1 - 2 * (b - 0.5)), 0, 1)),
+      'linear-light': (a, b) => clamp(a + 2 * b - 1, 0, 1),
+      'pin-light': (a, b) => b < 0.5 ? Math.min(a, 2 * b) : Math.max(a, 2 * b - 1),
+      'hard-mix': (a, b) => a + b < 1 ? 0 : 1,
+      'subtract': (a, b) => clamp(a - b, 0, 1),
+      'divide': (a, b) => b === 0 ? 1 : clamp(a / b, 0, 1)
+    };
+
+    const customBlend = async (ctx, img, mode, x, y, w, h) => {
+      const temp = document.createElement('canvas');
+      temp.width = w;
+      temp.height = h;
+      const tempCtx = temp.getContext('2d');
+      tempCtx.drawImage(img, 0, 0, w, h);
+      const blendImageData = tempCtx.getImageData(0, 0, w, h);
+      const blendData = blendImageData.data;
+      const baseImageData = ctx.getImageData(x, y, w, h);
+      const baseData = baseImageData.data;
+      const f = blendFunctions[mode.toLowerCase()];
+      if (!f) return;
+      for (let i = 0; i < baseData.length; i += 4) {
+        const aR = baseData[i] / 255, aG = baseData[i + 1] / 255, aB = baseData[i + 2] / 255, aA = baseData[i + 3] / 255;
+        const bR = blendData[i] / 255, bG = blendData[i + 1] / 255, bB = blendData[i + 2] / 255, bA = blendData[i + 3] / 255;
+        const outA = aA + bA * (1 - aA);
+        const outR = (aR * aA + f(aR, bR) * bA * (1 - aA)) / outA;
+        const outG = (aG * aA + f(aG, bG) * bA * (1 - aA)) / outA;
+        const outB = (aB * aA + f(aB, bB) * bA * (1 - aA)) / outA;
+        baseData[i] = clamp(Math.round(outR * 255), 0, 255);
+        baseData[i + 1] = clamp(Math.round(outG * 255), 0, 255);
+        baseData[i + 2] = clamp(Math.round(outB * 255), 0, 255);
+        baseData[i + 3] = clamp(Math.round(outA * 255), 0, 255);
+      }
+      ctx.putImageData(baseImageData, x, y);
+    };
+
+    const initBackgroundAnimation = () => {
+      const canvas = document.getElementById('backgroundCanvas');
+      const ctx = canvas.getContext('2d');
+      let pixels = [];
+      const maxPixels = 50;
+
+      const resizeCanvas = () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      };
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      const createPixel = () => ({
+        x: Math.random() * canvas.width,
+        y: -10,
+        size: Math.random() * 2 + 1,
+        speed: Math.random() * 2 + 1,
+        color: document.body.classList.contains('purple-theme') ? `rgba(255, 0, 255, ${Math.random() * 0.3 + 0.2})` : `rgba(0, 255, 0, ${Math.random() * 0.3 + 0.2})`,
+        glitch: Math.random() < 0.05
+      });
+
+      const updatePixels = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (pixels.length < maxPixels && Math.random() < 0.1) pixels.push(createPixel());
+        pixels = pixels.filter(p => p.y < canvas.height + p.size);
+        pixels.forEach(p => {
+          p.y += p.speed;
+          if (p.glitch && Math.random() < 0.1) p.x += (Math.random() - 0.5) * 10;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        requestAnimationFrame(updatePixels);
+      };
+
+      document.querySelector('.theme-toggle').addEventListener('click', () => {
+        pixels = pixels.map(p => ({
+          ...p,
+          color: document.body.classList.contains('purple-theme') ? `rgba(255, 0, 255, ${Math.random() * 0.3 + 0.2})` : `rgba(0, 255, 0, ${Math.random() * 0.3 + 0.2})`
+        }));
+      });
+
+      updatePixels();
+    };
+
+    const loadImage = (blob) => new Promise((resolve, reject) => {
+      if (!(blob instanceof Blob) || !blob.type.startsWith('image/')) return reject(new Error('Invalid file type. Only images are supported.'));
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.src = url;
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Image loading timed out'));
+      }, 10000);
+      img.onload = () => {
+        clearTimeout(timeout);
+        if (img.width <= 0 || img.height <= 0) {
+          URL.revokeObjectURL(url);
+          reject(new Error('Invalid image dimensions'));
+        } else {
+          resolve({ img, url });
+        }
+      };
+      img.onerror = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image'));
+      };
+    });
+
+    const addLayer = () => {
+      const name = prompt('Enter layer name:');
+      if (!name) return;
+      if (state.layers.some(l => l.name === name.trim())) return alert('Layer name must be unique.');
+      const newLayer = {
+        id: Date.now(),
+        name: name.trim(),
+        traits: [],
+        zIndex: state.layers.length + 1,
+        showTraits: true
+      };
+      state.layers.push(newLayer);
+      state.previewTraits.set(newLayer.name, '');
+      updateLayersUI();
+    };
+
+    const deleteLayer = (layerId) => {
+      const layer = state.layers.find(l => l.id === layerId);
+      if (!layer) return;
+      if (confirm(`Delete layer "${layer.name}" and all its traits?`)) {
+        state.layers = state.layers.filter(l => l.id !== layerId);
+        state.previewTraits.delete(layer.name);
+        state.traitExclusions = state.traitExclusions.filter(ex => ex.layer1 !== layer.name && ex.layer2 !== layer.name);
+        state.layerExclusions = state.layerExclusions.filter(ex => ex.layer1 !== layer.name && ex.layer2 !== layer.name);
+        state.layers.forEach((l, idx) => l.zIndex = state.layers.length - idx);
+        if (state.currentEditedTrait && state.currentEditedTrait.layerId === layerId) {
+          state.currentEditedTrait = null;
+        }
+        updateLayersUI();
+        updatePreviewCanvas();
+      }
+    };
+
+    const renameLayer = (layerId, newName) => {
+      if (!newName.trim()) return alert('Layer name cannot be empty.');
+      if (state.layers.some(l => l.id !== layerId && l.name === newName.trim())) return alert('Layer name must be unique.');
+      const layer = state.layers.find(l => l.id === layerId);
+      if (!layer) return;
+      const oldName = layer.name;
+      layer.name = newName.trim();
+      const traitValue = state.previewTraits.get(oldName);
+      state.previewTraits.delete(oldName);
+      state.previewTraits.set(layer.name, traitValue || '');
+      state.traitExclusions = state.traitExclusions.map(ex => ({
+        ...ex,
+        layer1: ex.layer1 === oldName ? layer.name : ex.layer1,
+        layer2: ex.layer2 === oldName ? layer.name : ex.layer2
+      }));
+      state.layerExclusions = state.layerExclusions.map(ex => ({
+        ...ex,
+        layer1: ex.layer1 === oldName ? layer.name : ex.layer1,
+        layer2: ex.layer2 === oldName ? layer.name : ex.layer2
+      }));
+      state.galleryItems.forEach(item => {
+        if (item.combination[oldName]) {
+          const value = item.combination[oldName];
+          delete item.combination[oldName];
+          item.combination[layer.name] = value;
+        }
+      });
+      updateLayersUI();
+      updatePreviewCanvas();
+    };
+
+    const addTrait = (layerId) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/png';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return alert('No file selected.');
+        if (!file.type.match(/^image\/png$/i)) return alert('Only PNG images are supported.');
+        if (file.size > 10 * 1024 * 1024) return alert(`File "${file.name}" is too large (max 10MB).`);
+        const name = file.name.replace(/\.png$/i, '');
+        const weight = parseFloat(prompt(`Enter rarity weight for "${name}":`) || '10');
+        if (isNaN(weight) || weight <= 0) return alert('Weight must be positive.');
+        try {
+          const { img, url } = await loadImage(file);
+          const layer = state.layers.find(l => l.id === layerId);
+          if (!layer) return alert('Layer not found.');
+          layer.traits.push({ name, blob: file, weight, blendMode: 'Normal', x: 0, y: 0, scale: 1, image: img });
+          URL.revokeObjectURL(url);
+          layer.showTraits = true;
+          state.previewTraits.set(layer.name, name);
+          if (!state.dimensionsSet) {
+            state.canvasWidth = img.width;
+            state.canvasHeight = img.height;
+            document.getElementById('canvasWidth').value = state.canvasWidth;
+            document.getElementById('canvasHeight').value = state.canvasHeight;
+            state.dimensionsSet = true;
+            updateCanvasDimensions();
+          }
+          updateLayersUI();
+          updatePreviewCanvas();
+        } catch (error) {
+          alert(`Failed to load "${file.name}": ${error.message}`);
+        }
+      };
+      input.click();
+    };
+
+    const addTraitFolder = () => {
+      if (!('webkitdirectory' in HTMLInputElement.prototype)) return alert('Folder upload not supported by your browser.');
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.setAttribute('webkitdirectory', '');
+      input.accept = 'image/png';
+      input.multiple = true;
+      input.onchange = async (e) => {
+        const files = Array.from(e.target.files).filter(f => f.type.match(/^image\/png$/i));
+        if (!files.length) return alert('No valid PNG files found.');
+        const weight = parseFloat(prompt('Enter rarity weight for folder traits:') || '10');
+        if (isNaN(weight) || weight <= 0) return alert('Weight must be positive.');
+        const validFiles = [];
+        const failedFiles = [];
+        for (const file of files) {
+          if (file.size > 10 * 1024 * 1024) {
+            failedFiles.push(`${file.name} (too large)`);
+            continue;
+          }
+          try {
+            const { img, url } = await loadImage(file);
+            URL.revokeObjectURL(url);
+            validFiles.push({ file, img });
+            if (!state.dimensionsSet) {
+              state.canvasWidth = img.width;
+              state.canvasHeight = img.height;
+              document.getElementById('canvasWidth').value = state.canvasWidth;
+              document.getElementById('canvasHeight').value = state.canvasHeight;
+              state.dimensionsSet = true;
+              updateCanvasDimensions();
+            }
+          } catch (error) {
+            failedFiles.push(`${file.name} (${error.message})`);
+          }
+        }
+        if (!validFiles.length) return alert(`No valid PNG images loaded. Failed files: ${failedFiles.join(', ')}`);
+        const layer = state.layers.find(l => l.id === layerId);
+        if (!layer) return alert('Layer not found.');
+        layer.traits.push(...validFiles.map(({ file, img }) => ({
+          name: file.name.replace(/\.png$/i, ''),
+          blob: file,
+          weight,
+          blendMode: 'Normal',
+          x: 0,
+          y: 0,
+          scale: 1,
+          image: img
+        })));
+        layer.showTraits = true;
+        if (!state.previewTraits.get(layer.name) && validFiles.length) {
+          state.previewTraits.set(layer.name, validFiles[0].file.name.replace(/\.png$/i, ''));
+        }
+        updateLayersUI();
+        updatePreviewCanvas();
+        alert(`Added ${validFiles.length} traits to layer "${layer.name}".${failedFiles.length ? `\nFailed: ${failedFiles.join(', ')}` : ''}`);
+      };
+      input.click();
+    };
+
+    const importProjectFolder = () => {
+      if (!('webkitdirectory' in HTMLInputElement.prototype)) return alert('Folder upload not supported by your browser.');
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.setAttribute('webkitdirectory', '');
+      input.accept = 'image/png';
+      input.multiple = true;
+      input.onchange = async (e) => {
+        const files = Array.from(e.target.files).filter(f => f.type.match(/^image\/png$/i));
+        if (!files.length) return alert('No valid PNG files found.');
+        state.layers = [];
+        state.previewTraits.clear();
+        state.traitExclusions = [];
+        const projectStructure = {};
+        const failedFiles = [];
+        const pathFirst = new Set();
+        let minLength = Infinity;
+        for (const file of files) {
+          const pathParts = file.webkitRelativePath ? file.webkitRelativePath.split('/') : [file.name];
+          pathFirst.add(pathParts[0]);
+          minLength = Math.min(minLength, pathParts.length);
+        }
+        const skipFirst = pathFirst.size === 1 && minLength >= 3;
+        for (const file of files) {
+          if (file.size > 10 * 1024 * 1024) {
+            failedFiles.push(`${file.name} (too large)`);
+            continue;
+          }
+          try {
+            const { img, url } = await loadImage(file);
+            URL.revokeObjectURL(url);
+            let pathParts = file.webkitRelativePath ? file.webkitRelativePath.split('/') : [file.name];
+            if (skipFirst) pathParts = pathParts.slice(1);
+            let layerName = pathParts.length >= 2 ? pathParts[0] : 'ImportedLayer';
+            let weight = 10;
+            if (pathParts.length >= 3) {
+              const rarityFolder = pathParts[pathParts.length - 2].toLowerCase();
+              const rarityMap = {
+                'common': 10,
+                'uncommon': 7,
+                'rare': 5,
+                'epic': 3,
+                'legendary': 1
+              };
+              const weightMatch = rarityFolder.match(/\d+(\.\d+)?/);
+              weight = rarityMap[rarityFolder] || (weightMatch ? parseFloat(weightMatch[0]) : 10);
+            }
+            const traitName = file.name.replace(/\.png$/i, '');
+            if (!projectStructure[layerName]) projectStructure[layerName] = [];
+            projectStructure[layerName].push({ file, name: traitName, weight, img });
+            if (!state.dimensionsSet) {
+              state.canvasWidth = img.width;
+              state.canvasHeight = img.height;
+              document.getElementById('canvasWidth').value = state.canvasWidth;
+              document.getElementById('canvasHeight').value = state.canvasHeight;
+              state.dimensionsSet = true;
+              updateCanvasDimensions();
+            }
+          } catch (error) {
+            failedFiles.push(`${file.name} (${error.message})`);
+          }
+        }
+        if (!Object.keys(projectStructure).length) return alert(`No valid layers found. Failed files: ${failedFiles.join(', ')}`);
+        Object.keys(projectStructure).forEach((layerName, index) => {
+          const traits = projectStructure[layerName].map(({ file, name, weight, img }) => ({
+            name,
+            blob: file,
+            weight,
+            blendMode: 'Normal',
+            x: 0,
+            y: 0,
+            scale: 1,
+            image: img
+          }));
+          if (traits.length) {
+            state.layers.push({
+              id: Date.now() + index,
+              name: layerName,
+              traits,
+              zIndex: state.layers.length + 1,
+              showTraits: true
+            });
+            state.previewTraits.set(layerName, traits[0].name);
+          }
+        });
+        updateLayersUI();
+        updatePreviewCanvas();
+        alert(`Imported ${state.layers.length} layers with ${state.layers.reduce((sum, l) => sum + l.traits.length, 0)} traits.${failedFiles.length ? `\nFailed: ${failedFiles.join(', ')}` : ''}`);
+      };
+      input.click();
+    };
+
+    const deleteTrait = (layerId, traitIndex) => {
+      const layer = state.layers.find(l => l.id === layerId);
+      const trait = layer.traits[traitIndex];
+      if (!layer || !trait) return;
+      if (confirm(`Delete trait "${trait.name}" from layer "${layer.name}"?`)) {
+        state.traitExclusions = state.traitExclusions.filter(ex => !(ex.layer1 === layer.name && ex.trait1 === trait.name) && !(ex.layer2 === layer.name && ex.trait2 === trait.name));
+        layer.traits.splice(traitIndex, 1);
+        if (state.previewTraits.get(layer.name) === trait.name) {
+          state.previewTraits.set(layer.name, layer.traits[0]?.name || '');
+        }
+        if (state.currentEditedTrait && state.currentEditedTrait.layerId === layerId && state.currentEditedTrait.traitIndex === traitIndex) {
+          state.currentEditedTrait = null;
+        }
+        updateLayersUI();
+        updatePreviewCanvas();
+      }
+    };
+
+    const renameTrait = (layerId, traitIndex, newName) => {
+      if (!newName.trim()) return alert('Trait name cannot be empty.');
+      const layer = state.layers.find(l => l.id === layerId);
+      if (!layer) return;
+      if (layer.traits.some((t, i) => i !== traitIndex && t.name === newName.trim())) return alert('Trait name must be unique within the layer.');
+      const oldName = layer.traits[traitIndex].name;
+      layer.traits[traitIndex].name = newName.trim();
+      if (state.previewTraits.get(layer.name) === oldName) {
+        state.previewTraits.set(layer.name, newName.trim());
+      }
+      state.traitExclusions = state.traitExclusions.map(ex => ({
+        ...ex,
+        trait1: ex.layer1 === layer.name && ex.trait1 === oldName ? newName.trim() : ex.trait1,
+        trait2: ex.layer2 === layer.name && ex.trait2 === oldName ? newName.trim() : ex.trait2
+      }));
+      state.galleryItems.forEach(item => {
+        if (item.combination[layer.name] === oldName) {
+          item.combination[layer.name] = newName.trim();
+        }
+      });
+      updateLayersUI();
+      updatePreviewCanvas();
+    };
+
+    const updateTraitWeight = (layerId, traitIndex, value) => {
+      const weight = parseFloat(value);
+      if (isNaN(weight) || weight <= 0) return alert('Weight must be positive.');
+      const layer = state.layers.find(l => l.id === layerId);
+      layer.traits[traitIndex].weight = weight;
+      updateLayersUI();
+    };
+
+    const updateTraitBlendMode = (layerId, traitIndex, value) => {
+      const layer = state.layers.find(l => l.id === layerId);
+      layer.traits[traitIndex].blendMode = value;
+      updatePreviewCanvas();
+    };
+
+    const updateTraitPosition = (layerId, traitIndex, axis, value) => {
+      const layer = state.layers.find(l => l.id === layerId);
+      const pos = parseInt(value);
+      if (isNaN(pos)) return;
+      state.undoStack.push({
+        type: 'transform',
+        layerId,
+        traitIndex,
+        oldX: layer.traits[traitIndex].x || 0,
+        oldY: layer.traits[traitIndex].y || 0,
+        oldScale: layer.traits[traitIndex].scale || 1
+      });
+      if (axis === 'x') layer.traits[traitIndex].x = pos;
+      if (axis === 'y') layer.traits[traitIndex].y = pos;
+      updatePreviewCanvas();
+    };
+
+    const updateTraitScale = (layerId, traitIndex, value) => {
+      const layer = state.layers.find(l => l.id === layerId);
+      const scale = parseFloat(value);
+      if (isNaN(scale) || scale <= 0) return alert('Scale must be positive.');
+      state.undoStack.push({
+        type: 'transform',
+        layerId,
+        traitIndex,
+        oldX: layer.traits[traitIndex].x || 0,
+        oldY: layer.traits[traitIndex].y || 0,
+        oldScale: layer.traits[traitIndex].scale || 1
+      });
+      layer.traits[traitIndex].scale = scale;
+      updatePreviewCanvas();
+    };
+
+    const toggleTraits = (header) => {
+      const traitsDiv = header.nextElementSibling;
+      const layerIndex = parseInt(header.parentElement.dataset.index);
+      state.layers[layerIndex].showTraits = !state.layers[layerIndex].showTraits;
+      traitsDiv.classList.toggle('show');
+      header.querySelector('span').textContent = state.layers[layerIndex].showTraits ? '▼' : '▶';
+    };
+
+    const handleDragStart = (e) => {
+      e.target.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', e.target.dataset.index);
+    };
+
+    const handleDragOver = (e) => e.preventDefault();
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      const draggedIndex = parseInt(e.dataTransfer.getData('text/plain'));
+      const targetIndex = parseInt(e.target.closest('.layer-item').dataset.index);
+      if (draggedIndex !== targetIndex) {
+        const [draggedLayer] = state.layers.splice(draggedIndex, 1);
+        state.layers.splice(targetIndex, 0, draggedLayer);
+        state.layers.forEach((l, idx) => l.zIndex = state.layers.length - idx);
+        updateLayersUI();
+      }
+    };
+
+    const handleDragEnd = (e) => e.target.classList.remove('dragging');
+
+    const updateLayersUI = () => {
+      const layersDiv = document.getElementById('layers');
+      layersDiv.innerHTML = state.layers.map((layer, index) => `
+        <div class="layer-item" draggable="true" data-index="${index}" data-id="${layer.id}">
+          <div class="layer-header">
+            <input type="text" class="layer-name-input" value="${layer.name}" data-id="${layer.id}" onmousedown="event.stopPropagation()" draggable="false">
+            <div>
+              <button class="delete-layer-button" data-layer-id="${layer.id}" onmousedown="event.stopPropagation()" draggable="false">🗑️</button>
+              <span>${layer.showTraits ? '▼' : '▶'}</span>
+            </div>
+          </div>
+          <div class="layer-traits${layer.showTraits ? ' show' : ''}">
+            <div class="tooltip">
+              <button onmousedown="event.stopPropagation()" draggable="false">Add Trait</button>
+              <span class="tooltiptext">Add a single trait image</span>
+            </div>
+            <div class="tooltip">
+              <button onmousedown="event.stopPropagation()" draggable="false">Add Trait Folder</button>
+              <span class="tooltiptext">Add multiple traits from a folder</span>
+            </div>
+            ${layer.traits.map((trait, traitIndex) => `
+              <div class="trait-item${(state.currentEditedTrait && state.currentEditedTrait.layerId === layer.id && state.currentEditedTrait.traitIndex === traitIndex) ? ' selected' : ''}" data-layer-id="${layer.id}" data-trait-index="${traitIndex}">
+                <input type="text" class="trait-name-input" value="${trait.name}" data-layer-id="${layer.id}" data-trait-index="${traitIndex}" onmousedown="event.stopPropagation()" draggable="false">
+                <div>
+                  <input type="number" class="trait-weight" value="${trait.weight}" min="0.1" step="0.1" onmousedown="event.stopPropagation()" draggable="false">
+                  <button class="delete-trait-button" data-layer-id="${layer.id}" data-trait-index="${traitIndex}" onmousedown="event.stopPropagation()" draggable="false">🗑️</button>
+                </div>
+                <select class="trait-blend-mode" data-layer-id="${layer.id}" data-trait-index="${traitIndex}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" draggable="false">
+                  <option value="Normal" ${trait.blendMode === 'Normal' ? 'selected' : ''}>Normal</option>
+                  <option value="Multiply" ${trait.blendMode === 'Multiply' ? 'selected' : ''}>Multiply</option>
+                  <option value="Screen" ${trait.blendMode === 'Screen' ? 'selected' : ''}>Screen</option>
+                  <option value="Overlay" ${trait.blendMode === 'Overlay' ? 'selected' : ''}>Overlay</option>
+                  <option value="Darken" ${trait.blendMode === 'Darken' ? 'selected' : ''}>Darken</option>
+                  <option value="Lighten" ${trait.blendMode === 'Lighten' ? 'selected' : ''}>Lighten</option>
+                  <option value="Color Dodge" ${trait.blendMode === 'Color Dodge' ? 'selected' : ''}>Color Dodge</option>
+                  <option value="Color Burn" ${trait.blendMode === 'Color Burn' ? 'selected' : ''}>Color Burn</option>
+                  <option value="Hard Light" ${trait.blendMode === 'Hard Light' ? 'selected' : ''}>Hard Light</option>
+                  <option value="Soft Light" ${trait.blendMode === 'Soft Light' ? 'selected' : ''}>Soft Light</option>
+                  <option value="Difference" ${trait.blendMode === 'Difference' ? 'selected' : ''}>Difference</option>
+                  <option value="Exclusion" ${trait.blendMode === 'Exclusion' ? 'selected' : ''}>Exclusion</option>
+                  <option value="Hue" ${trait.blendMode === 'Hue' ? 'selected' : ''}>Hue</option>
+                  <option value="Saturation" ${trait.blendMode === 'Saturation' ? 'selected' : ''}>Saturation</option>
+                  <option value="Color" ${trait.blendMode === 'Color' ? 'selected' : ''}>Color</option>
+                  <option value="Luminosity" ${trait.blendMode === 'Luminosity' ? 'selected' : ''}>Luminosity</option>
+                  <option value="Linear Burn" ${trait.blendMode === 'Linear Burn' ? 'selected' : ''}>Linear Burn</option>
+                  <option value="Linear Dodge" ${trait.blendMode === 'Linear Dodge' ? 'selected' : ''}>Linear Dodge</option>
+                  <option value="Vivid Light" ${trait.blendMode === 'Vivid Light' ? 'selected' : ''}>Vivid Light</option>
+                  <option value="Linear Light" ${trait.blendMode === 'Linear Light' ? 'selected' : ''}>Linear Light</option>
+                  <option value="Pin Light" ${trait.blendMode === 'Pin Light' ? 'selected' : ''}>Pin Light</option>
+                  <option value="Hard Mix" ${trait.blendMode === 'Hard Mix' ? 'selected' : ''}>Hard Mix</option>
+                  <option value="Subtract" ${trait.blendMode === 'Subtract' ? 'selected' : ''}>Subtract</option>
+                  <option value="Divide" ${trait.blendMode === 'Divide' ? 'selected' : ''}>Divide</option>
+                </select>
+                <div class="trait-position">
+                  <label>X: <input type="number" class="trait-x" value="${trait.x || 0}" data-layer-id="${layer.id}" data-trait-index="${traitIndex}" onmousedown="event.stopPropagation()" draggable="false"></label>
+                  <label>Y: <input type="number" class="trait-y" value="${trait.y || 0}" data-layer-id="${layer.id}" data-trait-index="${traitIndex}" onmousedown="event.stopPropagation()" draggable="false"></label>
+                </div>
+                <div class="trait-scale">
+                  <label>Scale: <input type="number" class="trait-scale" value="${trait.scale || 1}" step="0.1" min="0.1" data-layer-id="${layer.id}" data-trait-index="${traitIndex}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" draggable="false"></label>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+      updatePreviewControls();
+      updateTraitRarity();
+      updateTraitExclusionUI();
+      updateLayerExclusionUI();
+    };
+
+    const updateTraitRarity = () => {
+      const rarityDiv = document.getElementById('traitRarity');
+      rarityDiv.innerHTML = state.layers.map(layer => {
+        const totalWeight = layer.traits.reduce((sum, t) => sum + t.weight, 0);
+        if (!totalWeight) return '';
+        return `
+          <div>
+            <strong>${layer.name}</strong>
+            ${layer.traits.map(trait => `
+              <div class="rarity-item">${trait.name}: ${((trait.weight / totalWeight) * 100).toFixed(2)}%</div>
+            `).join('')}
+          </div>
+        `;
+      }).join('');
+    };
+
+    const toggleTraitRarity = () => {
+      state.isTraitRarityVisible = !state.isTraitRarityVisible;
+      const content = document.getElementById('traitRarity');
+      const toggle = document.getElementById('traitRarityToggle');
+      content.classList.toggle('show', state.isTraitRarityVisible);
+      toggle.textContent = state.isTraitRarityVisible ? '▼' : '▶';
+    };
+
+    const updateTraitExclusionUI = () => {
+      const exclusionList = document.getElementById('exclusionList');
+      exclusionList.innerHTML = state.traitExclusions.map((exclusion, index) => `
+        <div class="exclusion-item" data-index="${index}">
+          ${exclusion.trait1} ↔ ${exclusion.trait2}
+          <button class="delete-button">🗑️</button>
+        </div>
+      `).join('');
+    };
+
+    const addTraitExclusion = () => {
+      const allTraits = state.layers.flatMap(layer => 
+        layer.traits.map(trait => ({ layerName: layer.name, traitName: trait.name }))
+      );
+      if (allTraits.length < 2) return alert('Need at least two traits for exclusion.');
+      const existingForm = document.querySelector('#exclusionForm .trait-exclusion-form');
+      if (existingForm) return alert('Complete or cancel current exclusion rule.');
+      const form = document.createElement('div');
+      form.className = 'trait-exclusion-form';
+      form.innerHTML = `
+        <select id="traitExclusion1">
+          <option value="">Select First Trait</option>
+          ${allTraits.map(t => `<option value="${t.layerName}:${t.traitName}">${t.layerName}: ${t.traitName}</option>`).join('')}
+        </select>
+        <select id="traitExclusion2">
+          <option value="">Select Second Trait</option>
+          ${allTraits.map(t => `<option value="${t.layerName}:${t.traitName}">${t.layerName}: ${t.traitName}</option>`).join('')}
+        </select>
+        <button class="cancel-exclusion">Cancel</button>
+      `;
+      document.getElementById('exclusionForm').appendChild(form);
+    };
+
+    const deleteTraitExclusion = (index) => {
+      if (confirm(`Delete exclusion: ${state.traitExclusions[index].trait1} ↔ ${state.traitExclusions[index].trait2}?`)) {
+        state.traitExclusions.splice(index, 1);
+        updateTraitExclusionUI();
+      }
+    };
+
+    const toggleTraitExclusion = () => {
+      state.isTraitExclusionVisible = !state.isTraitExclusionVisible;
+      const content = document.getElementById('traitExclusion');
+      const toggle = document.getElementById('traitExclusionToggle');
+      content.classList.toggle('show', state.isTraitExclusionVisible);
+      toggle.textContent = state.isTraitExclusionVisible ? '▼' : '▶';
+    };
+
+    const updateLayerExclusionUI = () => {
+      const exclusionList = document.getElementById('layerExclusionList');
+      exclusionList.innerHTML = state.layerExclusions.map((exclusion, index) => `
+        <div class="layer-exclusion-item" data-index="${index}">
+          ${exclusion.layer1} ↔ ${exclusion.layer2}
+          <button class="delete-button">🗑️</button>
+        </div>
+      `).join('');
+    };
+
+    const addLayerExclusion = () => {
+      if (state.layers.length < 2) return alert('Need at least two layers for exclusion.');
+      const existingForm = document.querySelector('#layerExclusionForm .layer-exclusion-form');
+      if (existingForm) return alert('Complete or cancel current layer exclusion rule.');
+      const form = document.createElement('div');
+      form.className = 'layer-exclusion-form';
+      form.innerHTML = `
+        <select id="layerExclusion1">
+          <option value="">Select First Layer</option>
+          ${state.layers.map(layer => `<option value="${layer.name}">${layer.name}</option>`).join('')}
+        </select>
+        <select id="layerExclusion2">
+          <option value="">Select Second Layer</option>
+          ${state.layers.map(layer => `<option value="${layer.name}">${layer.name}</option>`).join('')}
+        </select>
+        <button class="cancel-exclusion">Cancel</button>
+      `;
+      document.getElementById('layerExclusionForm').appendChild(form);
+    };
+
+    const deleteLayerExclusion = (index) => {
+      if (confirm(`Delete exclusion: ${state.layerExclusions[index].layer1} ↔ ${state.layerExclusions[index].layer2}?`)) {
+        state.layerExclusions.splice(index, 1);
+        updateLayerExclusionUI();
+      }
+    };
+
+    const toggleLayerExclusion = () => {
+      state.isLayerExclusionVisible = !state.isLayerExclusionVisible;
+      const content = document.getElementById('layerExclusion');
+      const toggle = document.getElementById('layerExclusionToggle');
+      content.classList.toggle('show', state.isLayerExclusionVisible);
+      toggle.textContent = state.isLayerExclusionVisible ? '▼' : '▶';
+    };
+
+    const updatePreviewControls = () => {
+      document.getElementById('previewControls').innerHTML = state.layers.map(layer => `
+        <div>
+          <label>${layer.name}</label>
+          <select data-layer="${layer.name}">
+            <option value="">None</option>
+            ${layer.traits.map(trait => `
+              <option value="${trait.name}" ${state.previewTraits.get(layer.name) === trait.name ? 'selected' : ''}>
+                ${trait.name}
+              </option>
+            `).join('')}
+          </select>
+        </div>
+      `).join('');
+    };
+
+    const updateCanvasDimensions = () => {
+      const width = parseInt(document.getElementById('canvasWidth').value) || 500;
+      const height = parseInt(document.getElementById('canvasHeight').value) || 500;
+      if (width <= 0 || height <= 0) {
+        alert('Canvas dimensions must be positive.');
+        document.getElementById('canvasWidth').value = state.canvasWidth;
+        document.getElementById('canvasHeight').value = state.canvasHeight;
+        return;
+      }
+      state.canvasWidth = width;
+      state.canvasHeight = height;
+      const canvas = document.getElementById('previewCanvas');
+      const maxPreviewSize = 500;
+      const scaleFactor = Math.min(maxPreviewSize / width, maxPreviewSize / height, 1);
+      canvas.width = width * scaleFactor;
+      canvas.height = height * scaleFactor;
+      canvas.style.width = `${canvas.width}px`;
+      canvas.style.height = `${canvas.height}px`;
+      updatePreviewCanvas();
+    };
+
+    const updatePreviewCanvas = async () => {
+      const canvas = document.getElementById('previewCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const maxPreviewSize = 500;
+      const scaleFactor = Math.min(maxPreviewSize / state.canvasWidth, maxPreviewSize / state.canvasHeight, 1);
+      const sortedLayers = [...state.layers].sort((a, b) => a.zIndex - b.zIndex);
+      for (const layer of sortedLayers) {
+        const traitName = state.previewTraits.get(layer.name);
+        const trait = layer.traits.find(t => t.name === traitName);
+        if (trait && trait.image) {
+          const img = trait.image;
+          const blendMode = trait.blendMode || 'Normal';
+          const gco = blendModeMap[blendMode];
+          const traitX = (trait.x || 0) * scaleFactor;
+          const traitY = (trait.y || 0) * scaleFactor;
+          const scale = (trait.scale || 1) * scaleFactor;
+          const width = img.width * scale;
+          const height = img.height * scale;
+          if (gco) {
+            ctx.globalCompositeOperation = gco;
+            ctx.drawImage(img, traitX, traitY, width, height);
+          } else {
+            await customBlend(ctx, img, blendMode, traitX, traitY, width, height);
+          }
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      if (state.currentEditedTrait) {
+        const layer = state.layers.find(l => l.id === state.currentEditedTrait.layerId);
+        if (layer) {
+          const trait = layer.traits[state.currentEditedTrait.traitIndex];
+          if (trait && trait.image) {
+            const x = (trait.x || 0) * scaleFactor;
+            const y = (trait.y || 0) * scaleFactor;
+            const scale = (trait.scale || 1) * scaleFactor;
+            const w = trait.image.width * scale;
+            const h = trait.image.height * scale;
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary-color');
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, w, h);
+            const handleSize = 8;
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+            ctx.strokeRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+            ctx.fillRect(x + w - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+            ctx.strokeRect(x + w - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+            ctx.fillRect(x - handleSize / 2, y + h - handleSize / 2, handleSize, handleSize);
+            ctx.strokeRect(x - handleSize / 2, y + h - handleSize / 2, handleSize, handleSize);
+            ctx.fillRect(x + w - handleSize / 2, y + h - handleSize / 2, handleSize, handleSize);
+            ctx.strokeRect(x + w - handleSize / 2, y + h - handleSize / 2, handleSize, handleSize);
+          }
+        }
+      }
+    };
+
+    const generateRandomCombination = () => {
+      const combination = {};
+      const totalWeights = state.layers.reduce((acc, layer) => {
+        acc[layer.name] = layer.traits.reduce((sum, t) => sum + t.weight, 0);
+        return acc;
+      }, {});
+      state.layers.forEach(layer => {
+        if (!layer.traits.length) return;
+        let rand = Math.random() * totalWeights[layer.name];
+        for (const trait of layer.traits) {
+          rand -= trait.weight;
+          if (rand <= 0) {
+            combination[layer.name] = trait.name;
+            break;
+          }
+        }
+      });
+      return combination;
+    };
+
+    const isValidCombination = (combination) => {
+      for (const exclusion of state.traitExclusions) {
+        const [layer1, trait1] = exclusion.trait1.split(':');
+        const [layer2, trait2] = exclusion.trait2.split(':');
+        if (combination[layer1] === trait1 && combination[layer2] === trait2) return false;
+      }
+      for (const exclusion of state.layerExclusions) {
+        if (combination[exclusion.layer1] && combination[exclusion.layer2]) return false;
+      }
+      return true;
+    };
+
+    const generateUniqueCombination = () => {
+      const maxAttempts = 1000;
+      let attempts = 0;
+      let combination;
+      const existing = new Set(state.galleryItems.map(item => JSON.stringify(item.combination)));
+      do {
+        combination = generateRandomCombination();
+        attempts++;
+        if (attempts > maxAttempts) return null;
+      } while (!isValidCombination(combination) || existing.has(JSON.stringify(combination)));
+      return combination;
+    };
+
+    const renderCombination = async (combination, forThumbnail = false) => {
+      const canvas = document.createElement('canvas');
+      const width = forThumbnail ? 100 : state.canvasWidth;
+      const height = forThumbnail ? 100 : state.canvasHeight;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      const scaleFactor = forThumbnail ? Math.min(100 / state.canvasWidth, 100 / state.canvasHeight) : 1;
+      const sortedLayers = [...state.layers].sort((a, b) => a.zIndex - b.zIndex);
+      for (const layer of sortedLayers) {
+        const traitName = combination[layer.name];
+        if (!traitName) continue;
+        const trait = layer.traits.find(t => t.name === traitName);
+        if (!trait || !trait.image) continue;
+        const img = trait.image;
+        const blendMode = trait.blendMode || 'Normal';
+        const gco = blendModeMap[blendMode];
+        const traitX = (trait.x || 0) * scaleFactor;
+        const traitY = (trait.y || 0) * scaleFactor;
+        const scale = (trait.scale || 1) * scaleFactor;
+        const width = img.width * scale;
+        const height = img.height * scale;
+        if (gco) {
+          ctx.globalCompositeOperation = gco;
+          ctx.drawImage(img, traitX, traitY, width, height);
+        } else {
+          await customBlend(ctx, img, blendMode, traitX, traitY, width, height);
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      return canvas.toDataURL('image/png');
+    };
+
+    const previewRandomNFT = async () => {
+      if (!state.layers.some(l => l.traits.length)) return alert('Add some traits first!');
+      const combination = generateUniqueCombination();
+      if (!combination) return alert('Could not generate a unique valid combination.');
+      state.previewTraits.clear();
+      Object.entries(combination).forEach(([layer, trait]) => state.previewTraits.set(layer, trait));
+      updateLayersUI();
+      await updatePreviewCanvas();
+    };
+
+    const generateGallery = async () => {
+      if (state.isGeneratingGallery) return;
+      state.isGeneratingGallery = true;
+      const count = parseInt(document.getElementById('nftCount').value) || 100;
+      if (isNaN(count) || count <= 0 || count > 2222) {
+        state.isGeneratingGallery = false;
+        return alert('Number of NFTs must be between 1 and 2222.');
+      }
+      const generateButton = document.getElementById('generateGalleryButton');
+      const progressContainer = document.getElementById('galleryProgress');
+      const progressBar = document.getElementById('galleryProgressBar');
+      const progressText = document.getElementById('galleryProgressText');
+      const cancelButton = document.getElementById('cancelGalleryButton');
+      const spinner = document.getElementById('gallerySpinner');
+      generateButton.disabled = true;
+      generateButton.textContent = 'Generating...';
+      progressContainer.classList.add('show');
+      cancelButton.style.display = 'block';
+      spinner.classList.add('show');
+      state.galleryItems = [];
+      const galleryGrid = document.getElementById('galleryGrid');
+      galleryGrid.innerHTML = '';
+      try {
+        for (let i = 0; i < count && state.isGeneratingGallery; i++) {
+          const combination = generateUniqueCombination();
+          if (!combination) throw new Error('Could not generate a unique valid combination.');
+          const thumbnailData = await renderCombination(combination, true);
+          const fullData = await renderCombination(combination, false);
+          state.galleryItems.push({ combination, dataUrl: fullData, thumbnail: thumbnailData });
+          const galleryItem = document.createElement('div');
+          galleryItem.className = 'gallery-item';
+          galleryItem.dataset.index = i;
+          galleryItem.innerHTML = `<img src="${thumbnailData}" alt="NFT ${i + 1}">`;
+          galleryGrid.appendChild(galleryItem);
+          const progress = ((i + 1) / count) * 100;
+          progressBar.style.width = `${progress}%`;
+          progressText.textContent = `${Math.round(progress)}%`;
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      } catch (error) {
+        alert(`Failed to generate gallery: ${error.message}`);
+      } finally {
+        state.isGeneratingGallery = false;
+        generateButton.disabled = false;
+        generateButton.textContent = 'Generate Preview NFTs';
+        progressContainer.classList.remove('show');
+        cancelButton.style.display = 'none';
+        spinner.classList.remove('show');
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+      }
+    };
+
+    const createMetadata = (id, combination, layers) => {
+      const title = document.getElementById('metadataTitle').value.trim() || 'Super NFT';
+      const description = document.getElementById('metadataDescription').value.trim() || 'A unique NFT from the Super NFT Generator collection';
+      const ipfsCID = document.getElementById('ipfsCID').value.trim();
+      const includeIPFS = document.getElementById('includeIPFS').checked;
+      const attributes = Object.entries(combination).map(([layer, trait]) => ({
+        trait_type: layer,
+        value: trait
+      }));
+      const oneOfOneData = state.oneOfOneItems.get(id - 1);
+      if (oneOfOneData) {
+        oneOfOneData.customTraits.forEach(trait => {
+          if (trait.layerName && trait.traitName) {
+            attributes.push({
+              trait_type: trait.layerName,
+              value: trait.traitName
+            });
+          }
+        });
+      }
+      const metadata = {
+        name: oneOfOneData ? `1/1 NFT #${id}` : `${title} #${id}`,
+        description,
+        image: includeIPFS && ipfsCID ? `ipfs://${ipfsCID}/${id}.png` : `${id}.png`,
+        attributes
+      };
+      return metadata;
+    };
+
+    const exportNewMetadata = async () => {
+      if (!state.galleryItems.length) return alert('No NFTs to export. Generate preview gallery first.');
+      const zip = new JSZip();
+      const title = document.getElementById('metadataTitle').value.trim() || 'Super NFT';
+      const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+      for (let i = 0; i < state.galleryItems.length; i++) {
+        const metadata = createMetadata(i + 1, state.galleryItems[i].combination, state.layers);
+        zip.file(`${i + 1}.json`, JSON.stringify(metadata, null, 2));
+      }
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `${sanitizedTitle}_Metadata.zip`);
+    };
+
+    const downloadNFTs = async () => {
+      if (state.isDownloadingNFTs) return;
+      state.isDownloadingNFTs = true;
+      const downloadButton = document.getElementById('downloadNFTsButton');
+      const progressContainer = document.getElementById('nftProgress');
+      const progressBar = document.getElementById('nftProgressBar');
+      const progressText = document.getElementById('nftProgressText');
+      const cancelButton = document.getElementById('cancelNFTButton');
+      const spinner = document.getElementById('nftSpinner');
+      downloadButton.disabled = true;
+      downloadButton.textContent = 'Downloading...';
+      progressContainer.classList.add('show');
+      cancelButton.style.display = 'block';
+      spinner.classList.add('show');
+      try {
+        if (!state.galleryItems.length) throw new Error('No NFTs to download.');
+        const zip = new JSZip();
+        const title = document.getElementById('metadataTitle').value.trim() || 'Super NFT';
+        const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+        for (let i = 0; i < state.galleryItems.length; i++) {
+          if (!state.isDownloadingNFTs) throw new Error('Download cancelled');
+          const item = state.galleryItems[i];
+          const metadata = createMetadata(i + 1, item.combination, state.layers);
+          zip.file(`${i + 1}.png`, item.dataUrl.split(',')[1], { base64: true });
+          zip.file(`${i + 1}.json`, JSON.stringify(metadata, null, 2));
+          const progress = ((i + 1) / state.galleryItems.length) * 100;
+          progressBar.style.width = `${progress}%`;
+          progressText.textContent = `${Math.round(progress)}%`;
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        const content = await zip.generateAsync({ type: 'blob' });
+        saveAs(content, `${sanitizedTitle}_NFTs.zip`);
+      } catch (error) {
+        alert(`Failed to download NFTs: ${error.message}`);
+      } finally {
+        state.isDownloadingNFTs = false;
+        downloadButton.disabled = false;
+        downloadButton.textContent = 'Download NFTs';
+        progressContainer.classList.remove('show');
+        cancelButton.style.display = 'none';
+        spinner.classList.remove('show');
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+      }
+    };
+
+    const showNFTModal = async (index) => {
+  state.currentModalIndex = index;
+  const item = state.galleryItems[index];
+  if (!item) return;
+  const modal = document.getElementById('nftModal');
+  const modalImage = document.getElementById('modalImage');
+  const modalTraitList = document.getElementById('modalTraitList');
+  const modalTraitEditor = document.getElementById('modalTraitEditor');
+  const modalCounter = document.getElementById('modalCounter');
+  const nftName = document.getElementById('nftName');
+  const title = document.getElementById('metadataTitle').value.trim() || 'Super NFT';
+  const oneOfOneData = state.oneOfOneItems.get(index);
+
+  modalImage.classList.add('fade');
+  modalImage.src = item.dataUrl;
+  setTimeout(() => modalImage.classList.remove('fade'), 300);
+
+  nftName.textContent = oneOfOneData ? `1/1 NFT #${index + 1}` : `${title} #${index + 1}`;
+  modalCounter.textContent = `${index + 1}/${state.galleryItems.length}`;
+  modalTraitList.innerHTML = Object.entries(item.combination)
+    .filter(([_, trait]) => trait)
+    .map(([layer, trait]) => `<div>${layer}: ${trait}</div>`)
+    .join('');
+
+  modalTraitEditor.innerHTML = state.layers.map(layer => `
+    <div>
+      <label>${layer.name}</label>
+      <select data-layer="${layer.name}">
+        <option value="">None</option>
+        ${layer.traits.map(trait => `
+          <option value="${trait.name}" ${item.combination[layer.name] === trait.name ? 'selected' : ''}>
+            ${trait.name}
+          </option>
+        `).join('')}
+      </select>
+    </div>
+  `).join('');
+
+  // Hide trait editor for 1/1 NFTs
+  modalTraitEditor.style.display = oneOfOneData ? 'none' : 'grid';
+
+  const customTraitsSection = document.getElementById('customTraitsSection');
+  const customTraitList = document.getElementById('customTraitList');
+  customTraitsSection.style.display = oneOfOneData ? 'block' : 'none';
+  if (oneOfOneData) {
+    customTraitList.innerHTML = oneOfOneData.customTraits.map((trait, tIndex) => `
+      <div class="custom-trait-item">
+        <input type="text" class="custom-layer-name" value="${trait.layerName}" placeholder="Layer Name" data-index="${tIndex}">
+        <input type="text" class="custom-trait-name" value="${trait.traitName}" placeholder="Trait Name" data-index="${tIndex}">
+        <button class="delete-custom-trait" data-index="${tIndex}">🗑️</button>
+      </div>
+    `).join('');
+  } else {
+    customTraitList.innerHTML = '';
+  }
+  const duplicateWarning = document.getElementById('duplicateWarning');
+  const existing = new Set(state.galleryItems.map((it, idx) => idx !== index ? JSON.stringify(it.combination) : null));
+  duplicateWarning.classList.toggle('show', existing.has(JSON.stringify(item.combination)));
+  modal.style.display = 'flex';
+};
+
+    const downloadNFTModal = async () => {
+      const item = state.galleryItems[state.currentModalIndex];
+      if (!item) return;
+      const title = document.getElementById('metadataTitle').value.trim() || 'Super NFT';
+      const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+      const zip = new JSZip();
+      zip.file(`${state.currentModalIndex + 1}.png`, item.dataUrl.split(',')[1], { base64: true });
+      const metadata = createMetadata(state.currentModalIndex + 1, item.combination, state.layers);
+      zip.file(`${state.currentModalIndex + 1}.json`, JSON.stringify(metadata, null, 2));
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `${sanitizedTitle}_${state.currentModalIndex + 1}.zip`);
+    };
+
+    const replaceWithOneOfOne = async () => {
+  const item = state.galleryItems[state.currentModalIndex];
+  if (!item) {
+    alert('No NFT selected for replacement.');
+    return;
+  }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/png';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) {
+      alert('No file selected.');
+      return;
+    }
+    if (!file.type.match(/^image\/png$/i)) {
+      alert('Only PNG images are supported.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert(`File "${file.name}" is too large (max 10MB).`);
+      return;
+    }
+
+    try {
+      const { img, url } = await loadImage(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = state.canvasWidth;
+      canvas.height = state.canvasHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, state.canvasWidth, state.canvasHeight);
+      const newDataUrl = canvas.toDataURL('image/png');
+
+      const thumbCanvas = document.createElement('canvas');
+      thumbCanvas.width = 100;
+      thumbCanvas.height = 100;
+      const thumbCtx = thumbCanvas.getContext('2d');
+      const scaleFactor = Math.min(100 / img.width, 100 / img.height);
+      const thumbWidth = img.width * scaleFactor;
+      const thumbHeight = img.height * scaleFactor;
+      thumbCtx.drawImage(img, (100 - thumbWidth) / 2, (100 - thumbHeight) / 2, thumbWidth, thumbHeight);
+      const newThumbnail = thumbCanvas.toDataURL('image/png');
+
+      item.dataUrl = newDataUrl;
+      item.thumbnail = newThumbnail;
+      item.combination = {};  // Clear existing traits
+
+      state.oneOfOneItems.set(state.currentModalIndex, {
+        combination: { ...item.combination },
+        customTraits: []
+      });
+
+      const galleryItem = document.querySelector(`.gallery-item[data-index="${state.currentModalIndex}"]`);
+      if (galleryItem) {
+        galleryItem.innerHTML = `<img src="${newThumbnail}" alt="NFT ${state.currentModalIndex + 1}">`;
+      }
+
+      document.getElementById('customTraitsSection').style.display = 'block';
+      await showNFTModal(state.currentModalIndex);
+
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error replacing 1/1 NFT:', error);
+      alert(`Failed to load "${file.name}": ${error.message}`);
+    }
+  };
+  input.click();
+};
+
+    const addCustomTrait = () => {
+      const oneOfOneData = state.oneOfOneItems.get(state.currentModalIndex);
+      if (!oneOfOneData) return;
+      oneOfOneData.customTraits.push({ layerName: '', traitName: '' });
+      showNFTModal(state.currentModalIndex);
+    };
+
+    const updateCustomTrait = (index, field, value) => {
+      const oneOfOneData = state.oneOfOneItems.get(state.currentModalIndex);
+      if (!oneOfOneData) return;
+      oneOfOneData.customTraits[index][field] = value;
+      showNFTModal(state.currentModalIndex);
+    };
+
+    const deleteCustomTrait = (index) => {
+      const oneOfOneData = state.oneOfOneItems.get(state.currentModalIndex);
+      if (!oneOfOneData) return;
+      if (confirm('Delete this custom trait?')) {
+        oneOfOneData.customTraits.splice(index, 1);
+        showNFTModal(state.currentModalIndex);
+      }
+    };
+
+    const undoTransform = () => {
+      const lastAction = state.undoStack.pop();
+      if (!lastAction || lastAction.type !== 'transform') return;
+      const { layerId, traitIndex, oldX, oldY, oldScale } = lastAction;
+      const layer = state.layers.find(l => l.id === layerId);
+      if (!layer || !layer.traits[traitIndex]) return;
+      const trait = layer.traits[traitIndex];
+      trait.x = oldX;
+      trait.y = oldY;
+      trait.scale = oldScale;
+      const inputs = document.querySelectorAll(`.trait-x[data-layer-id="${layerId}"][data-trait-index="${traitIndex}"]`);
+      inputs.forEach(input => input.value = oldX);
+      const yInputs = document.querySelectorAll(`.trait-y[data-layer-id="${layerId}"][data-trait-index="${traitIndex}"]`);
+      yInputs.forEach(input => input.value = oldY);
+      const scaleInputs = document.querySelectorAll(`.trait-scale[data-layer-id="${layerId}"][data-trait-index="${traitIndex}"]`);
+      scaleInputs.forEach(input => input.value = oldScale);
+      updatePreviewCanvas();
+    };
+
+    const initEventListeners = () => {
+      document.querySelector('.theme-toggle').addEventListener('click', () => {
+        document.body.classList.toggle('purple-theme');
+        updatePreviewCanvas();
+      });
+
+      document.getElementById('layers').addEventListener('click', (e) => {
+        const header = e.target.closest('.layer-header');
+        if (header) toggleTraits(header);
+        const addTraitBtn = e.target.closest('button:not(.delete-layer-button):not(.delete-trait-button):not(.layer-name-input):not(.trait-name-input):not(.trait-weight):not(.trait-blend-mode):not(.trait-x):not(.trait-y):not(.trait-scale)');
+        if (addTraitBtn && addTraitBtn.textContent === 'Add Trait') {
+          const layerId = parseInt(addTraitBtn.closest('.layer-item').dataset.id);
+          addTrait(layerId);
+        }
+        if (addTraitBtn && addTraitBtn.textContent === 'Add Trait Folder') {
+          const layerId = parseInt(addTraitBtn.closest('.layer-item').dataset.id);
+          addTraitFolder(layerId);
+        }
+        const deleteLayerBtn = e.target.closest('.delete-layer-button');
+        const deleteTraitBtn = e.target.closest('.delete-trait-button');
+        if (deleteLayerBtn) {
+          const layerId = parseInt(deleteLayerBtn.dataset.layerId);
+          deleteLayer(layerId);
+        }
+        if (deleteTraitBtn) {
+          const layerId = parseInt(deleteTraitBtn.dataset.layerId);
+          const traitIndex = parseInt(deleteTraitBtn.dataset.traitIndex);
+          deleteTrait(layerId, traitIndex);
+        }
+      });
+
+      document.getElementById('layers').addEventListener('change', (e) => {
+        if (e.target.classList.contains('layer-name-input')) {
+          const layerId = parseInt(e.target.dataset.id);
+          renameLayer(layerId, e.target.value);
+        }
+        if (e.target.classList.contains('trait-name-input')) {
+          const layerId = parseInt(e.target.dataset.layerId);
+          const traitIndex = parseInt(e.target.dataset.traitIndex);
+          renameTrait(layerId, traitIndex, e.target.value);
+        }
+        if (e.target.classList.contains('trait-weight')) {
+          const layerId = parseInt(e.target.dataset.layerId);
+          const traitIndex = parseInt(e.target.dataset.traitIndex);
+          updateTraitWeight(layerId, traitIndex, e.target.value);
+        }
+        if (e.target.classList.contains('trait-blend-mode')) {
+          const layerId = parseInt(e.target.dataset.layerId);
+          const traitIndex = parseInt(e.target.dataset.traitIndex);
+          updateTraitBlendMode(layerId, traitIndex, e.target.value);
+        }
+        if (e.target.classList.contains('trait-x')) {
+          const layerId = parseInt(e.target.dataset.layerId);
+          const traitIndex = parseInt(e.target.dataset.traitIndex);
+          updateTraitPosition(layerId, traitIndex, 'x', e.target.value);
+        }
+        if (e.target.classList.contains('trait-y')) {
+          const layerId = parseInt(e.target.dataset.layerId);
+          const traitIndex = parseInt(e.target.dataset.traitIndex);
+          updateTraitPosition(layerId, traitIndex, 'y', e.target.value);
+        }
+        if (e.target.classList.contains('trait-scale')) {
+          const layerId = parseInt(e.target.dataset.layerId);
+          const traitIndex = parseInt(e.target.dataset.traitIndex);
+          updateTraitScale(layerId, traitIndex, e.target.value);
+        }
+      });
+
+      document.getElementById('layers').addEventListener('mousedown', (e) => {
+        const traitItem = e.target.closest('.trait-item');
+        if (traitItem) {
+          const layerId = parseInt(traitItem.dataset.layerId);
+          const traitIndex = parseInt(traitItem.dataset.traitIndex);
+          state.currentEditedTrait = { layerId, traitIndex };
+          updateLayersUI();
+          updatePreviewCanvas();
+        }
+      });
+
+      document.getElementById('previewControls').addEventListener('change', (e) => {
+        if (e.target.tagName === 'SELECT') {
+          const layerName = e.target.dataset.layer;
+          state.previewTraits.set(layerName, e.target.value);
+          updatePreviewCanvas();
+        }
+      });
+
+      document.getElementById('previewRandomNFTButton').addEventListener('click', previewRandomNFT);
+      document.getElementById('generateGalleryButton').addEventListener('click', generateGallery);
+      document.getElementById('downloadNFTsButton').addEventListener('click', downloadNFTs);
+      document.getElementById('cancelGalleryButton').addEventListener('click', () => {
+        state.isGeneratingGallery = false;
+      });
+      document.getElementById('cancelNFTButton').addEventListener('click', () => {
+        state.isDownloadingNFTs = false;
+      });
+      document.getElementById('galleryGrid').addEventListener('click', (e) => {
+        const item = e.target.closest('.gallery-item');
+        if (item) showNFTModal(parseInt(item.dataset.index));
+      });
+      document.getElementById('nftModal').addEventListener('click', (e) => {
+        if (e.target.classList.contains('close-modal')) {
+          document.getElementById('nftModal').style.display = 'none';
+        }
+        if (e.target.id === 'prevButton' && state.currentModalIndex > 0) {
+          showNFTModal(state.currentModalIndex - 1);
+        }
+        if (e.target.id === 'nextButton' && state.currentModalIndex < state.galleryItems.length - 1) {
+          showNFTModal(state.currentModalIndex + 1);
+        }
+        if (e.target.id === 'downloadNFTModalButton') {
+          downloadNFTModal();
+        }
+        if (e.target.id === 'replaceOneButton') {
+          replaceWithOneOfOne();
+        }
+        if (e.target.id === 'addCustomTraitButton') {
+          addCustomTrait();
+        }
+        if (e.target.classList.contains('delete-custom-trait')) {
+          deleteCustomTrait(parseInt(e.target.dataset.index));
+        }
+      });
+      document.getElementById('nftModal').addEventListener('change', (e) => {
+  const item = state.galleryItems[state.currentModalIndex];
+  const oneOfOneData = state.oneOfOneItems.get(state.currentModalIndex);
+  if (e.target.tagName === 'SELECT') {
+    if (oneOfOneData) return; // Prevent changes for 1/1 NFTs
+    const layerName = e.target.dataset.layer;
+    item.combination[layerName] = e.target.value;
+    (async () => {
+      item.dataUrl = await renderCombination(item.combination, false);
+      item.thumbnail = await renderCombination(item.combination, true);
+      const galleryItemImg = document.querySelector(`.gallery-item[data-index="${state.currentModalIndex}"] img`);
+      if (galleryItemImg) galleryItemImg.src = item.thumbnail;
+      showNFTModal(state.currentModalIndex);
+    })();
+  }
+  if (e.target.classList.contains('custom-layer-name')) {
+    updateCustomTrait(parseInt(e.target.dataset.index), 'layerName', e.target.value);
+  }
+  if (e.target.classList.contains('custom-trait-name')) {
+    updateCustomTrait(parseInt(e.target.dataset.index), 'traitName', e.target.value);
+  }
+});
+      document.querySelectorAll('.sidebar button').forEach(btn => {
+        if (btn.textContent === 'Add Layer') btn.addEventListener('click', addLayer);
+        if (btn.textContent === 'Import Project') btn.addEventListener('click', importProjectFolder);
+        if (btn.textContent === 'Add Trait Exclusion') btn.addEventListener('click', addTraitExclusion);
+        if (btn.textContent === 'Add Layer Exclusion') btn.addEventListener('click', addLayerExclusion);
+      });
+      document.getElementById('traitRarityToggle').addEventListener('click', toggleTraitRarity);
+      document.getElementById('traitExclusionToggle').addEventListener('click', toggleTraitExclusion);
+      document.getElementById('layerExclusionToggle').addEventListener('click', toggleLayerExclusion);
+      document.getElementById('exclusionForm').addEventListener('change', (e) => {
+        if (e.target.id === 'traitExclusion1' || e.target.id === 'traitExclusion2') {
+          const trait1 = document.getElementById('traitExclusion1').value;
+          const trait2 = document.getElementById('traitExclusion2').value;
+          if (trait1 && trait2 && trait1 !== trait2) {
+            const [layer1, t1] = trait1.split(':');
+            const [layer2, t2] = trait2.split(':');
+            if (layer1 === layer2) {
+              alert('Cannot exclude traits from the same layer.');
+              return;
+            }
+            if (state.traitExclusions.some(ex => (ex.trait1 === t1 && ex.trait2 === t2) || (ex.trait1 === t2 && ex.trait2 === t1))) {
+              alert('This exclusion already exists.');
+              return;
+            }
+            state.traitExclusions.push({ layer1, trait1: t1, layer2, trait2: t2 });
+            updateTraitExclusionUI();
+            document.getElementById('exclusionForm').innerHTML = '';
+          }
+        }
+      });
+      document.getElementById('exclusionForm').addEventListener('click', (e) => {
+        if (e.target.classList.contains('cancel-exclusion')) {
+          document.getElementById('exclusionForm').innerHTML = '';
+        }
+      });
+      document.getElementById('exclusionList').addEventListener('click', (e) => {
+        if (e.target.classList.contains('delete-button')) {
+          const index = parseInt(e.target.closest('.exclusion-item').dataset.index);
+          deleteTraitExclusion(index);
+        }
+      });
+      document.getElementById('layerExclusionForm').addEventListener('change', (e) => {
+        if (e.target.id === 'layerExclusion1' || e.target.id === 'layerExclusion2') {
+          const layer1 = document.getElementById('layerExclusion1').value;
+          const layer2 = document.getElementById('layerExclusion2').value;
+          if (layer1 && layer2 && layer1 !== layer2) {
+            if (state.layerExclusions.some(ex => (ex.layer1 === layer1 && ex.layer2 === layer2) || (ex.layer1 === layer2 && ex.layer2 === layer1))) {
+              alert('This layer exclusion already exists.');
+              return;
+            }
+            state.layerExclusions.push({ layer1, layer2 });
+            updateLayerExclusionUI();
+            document.getElementById('layerExclusionForm').innerHTML = '';
+          }
+        }
+      });
+      document.getElementById('layerExclusionForm').addEventListener('click', (e) => {
+        if (e.target.classList.contains('cancel-exclusion')) {
+          document.getElementById('layerExclusionForm').innerHTML = '';
+        }
+      });
+      document.getElementById('layerExclusionList').addEventListener('click', (e) => {
+        if (e.target.classList.contains('delete-button')) {
+          const index = parseInt(e.target.closest('.layer-exclusion-item').dataset.index);
+          deleteLayerExclusion(index);
+        }
+      });
+      document.getElementById('canvasWidth').addEventListener('change', updateCanvasDimensions);
+      document.getElementById('canvasHeight').addEventListener('change', updateCanvasDimensions);
+      document.getElementById('includeIPFS').addEventListener('change', (e) => {
+        document.getElementById('exportMetadataContainer').style.display = e.target.checked ? 'block' : 'none';
+      });
+      document.getElementById('exportMetadataButton').addEventListener('click', exportNewMetadata);
+      document.getElementById('layers').addEventListener('dragstart', handleDragStart);
+      document.getElementById('layers').addEventListener('dragover', handleDragOver);
+      document.getElementById('layers').addEventListener('drop', handleDrop);
+      document.getElementById('layers').addEventListener('dragend', handleDragEnd);
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'z') {
+          undoTransform();
+        }
+      });
+      const canvas = document.getElementById('previewCanvas');
+      let isDragging = false;
+      let isResizing = false;
+      let dragStartX, dragStartY;
+      let resizeCorner = null;
+      canvas.addEventListener('mousedown', (e) => {
+        if (!state.currentEditedTrait) return;
+        const layer = state.layers.find(l => l.id === state.currentEditedTrait.layerId);
+        if (!layer) return;
+        const trait = layer.traits[state.currentEditedTrait.traitIndex];
+        if (!trait) return;
+        const maxPreviewSize = 500;
+        const scaleFactor = Math.min(maxPreviewSize / state.canvasWidth, maxPreviewSize / state.canvasHeight, 1);
+        const x = (trait.x || 0) * scaleFactor;
+        const y = (trait.y || 0) * scaleFactor;
+        const scale = (trait.scale || 1) * scaleFactor;
+        const w = trait.image.width * scale;
+        const h = trait.image.height * scale;
+        const handleSize = 8;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        if (Math.abs(mouseX - x) < handleSize && Math.abs(mouseY - y) < handleSize) {
+          isResizing = true;
+          resizeCorner = 'top-left';
+        } else if (Math.abs(mouseX - (x + w)) < handleSize && Math.abs(mouseY - y) < handleSize) {
+          isResizing = true;
+          resizeCorner = 'top-right';
+        } else if (Math.abs(mouseX - x) < handleSize && Math.abs(mouseY - (y + h)) < handleSize) {
+          isResizing = true;
+          resizeCorner = 'bottom-left';
+        } else if (Math.abs(mouseX - (x + w)) < handleSize && Math.abs(mouseY - (y + h)) < handleSize) {
+          isResizing = true;
+          resizeCorner = 'bottom-right';
+        } else if (mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h) {
+          isDragging = true;
+          dragStartX = mouseX - x;
+          dragStartY = mouseY - y;
+        }
+        state.undoStack.push({
+          type: 'transform',
+          layerId: state.currentEditedTrait.layerId,
+          traitIndex: state.currentEditedTrait.traitIndex,
+          oldX: trait.x || 0,
+          oldY: trait.y || 0,
+          oldScale: trait.scale || 1
+        });
+      });
+      canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging && !isResizing) return;
+        const layer = state.layers.find(l => l.id === state.currentEditedTrait.layerId);
+        if (!layer) return;
+        const trait = layer.traits[state.currentEditedTrait.traitIndex];
+        if (!trait) return;
+        const maxPreviewSize = 500;
+        const scaleFactor = Math.min(maxPreviewSize / state.canvasWidth, maxPreviewSize / state.canvasHeight, 1);
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        if (isDragging) {
+          trait.x = (mouseX - dragStartX) / scaleFactor;
+          trait.y = (mouseY - dragStartY) / scaleFactor;
+          const inputs = document.querySelectorAll(`.trait-x[data-layer-id="${state.currentEditedTrait.layerId}"][data-trait-index="${state.currentEditedTrait.traitIndex}"]`);
+          inputs.forEach(input => input.value = trait.x);
+          const yInputs = document.querySelectorAll(`.trait-y[data-layer-id="${state.currentEditedTrait.layerId}"][data-trait-index="${state.currentEditedTrait.traitIndex}"]`);
+          yInputs.forEach(input => input.value = trait.y);
+        } else if (isResizing) {
+          const x = (trait.x || 0) * scaleFactor;
+          const y = (trait.y || 0) * scaleFactor;
+          const w = trait.image.width * (trait.scale || 1) * scaleFactor;
+          const h = trait.image.height * (trait.scale || 1) * scaleFactor;
+          let newScale = trait.scale || 1;
+          if (resizeCorner === 'top-left' || resizeCorner === 'bottom-left') {
+            const delta = (x - mouseX) / scaleFactor;
+            newScale = Math.max(0.1, (trait.image.width * (trait.scale || 1) + delta) / trait.image.width);
+            trait.x = (mouseX / scaleFactor) + (w / scaleFactor - trait.image.width * newScale) / 2;
+          } else if (resizeCorner === 'top-right' || resizeCorner === 'bottom-right') {
+            const delta = (mouseX - (x + w)) / scaleFactor;
+            newScale = Math.max(0.1, (trait.image.width * (trait.scale || 1) + delta) / trait.image.width);
+          }
+          trait.scale = newScale;
+          const scaleInputs = document.querySelectorAll(`.trait-scale[data-layer-id="${state.currentEditedTrait.layerId}"][data-trait-index="${state.currentEditedTrait.traitIndex}"]`);
+          scaleInputs.forEach(input => input.value = trait.scale);
+          const xInputs = document.querySelectorAll(`.trait-x[data-layer-id="${state.currentEditedTrait.layerId}"][data-trait-index="${state.currentEditedTrait.traitIndex}"]`);
+          xInputs.forEach(input => input.value = trait.x);
+        }
+        updatePreviewCanvas();
+      });
+      canvas.addEventListener('mouseup', () => {
+        isDragging = false;
+        isResizing = false;
+        resizeCorner = null;
+      });
+      canvas.addEventListener('mouseleave', () => {
+        isDragging = false;
+        isResizing = false;
+        resizeCorner = null;
+      });
+    };
+
+    initBackgroundAnimation();
+    initEventListeners();
+  </script>
+</body>
+</html>
